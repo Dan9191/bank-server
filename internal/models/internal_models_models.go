@@ -1,78 +1,74 @@
 package models
 
 import (
+	"errors"
+	"regexp"
 	"time"
-
-	"github.com/go-playground/validator/v10"
 )
 
-// User представляет пользователя
 type User struct {
-	ID        int64     `json:"id" db:"id"`
-	Username  string    `json:"username" validate:"required,alphanum,min=3,max=50" db:"username"`
-	Email     string    `json:"email" validate:"required,email" db:"email"`
-	Password  string    `json:"-" validate:"required,min=8" db:"password"`
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+	ID        int64     `json:"id"`
+	Username  string    `json:"username"`
+	Email     string    `json:"email"`
+	Password  string    `json:"password"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// Account представляет банковский счет
-type Account struct {
-	ID        int64     `json:"id" db:"id"`
-	UserID    int64     `json:"user_id" db:"user_id"`
-	Balance   float64   `json:"balance" db:"balance"`
-	Currency  string    `json:"currency" db:"currency"`
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
-}
-
-// Card представляет банковскую карту
-type Card struct {
-	ID           int64     `json:"id" db:"id"`
-	AccountID    int64     `json:"account_id" db:"account_id"`
-	CardNumber   string    `json:"card_number" db:"card_number"` // Зашифровано
-	ExpiryDate   string    `json:"expiry_date" db:"expiry_date"` // Зашифровано
-	CVV          string    `json:"-" db:"cvv"`                   // Хешировано
-	CreatedAt    time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
-	HMAC         string    `json:"-" db:"hmac"` // Для проверки целостности
-}
-
-// Transaction представляет транзакцию
-type Transaction struct {
-	ID            int64     `json:"id" db:"id"`
-	AccountID     int64     `json:"account_id" db:"account_id"`
-	Amount        float64   `json:"amount" db:"amount"`
-	Type          string    `json:"type" db:"type"` // deposit, withdrawal, transfer
-	Description   string    `json:"description" db:"description"`
-	CreatedAt     time.Time `json:"created_at" db:"created_at"`
-}
-
-// Credit представляет кредит
-type Credit struct {
-	ID           int64     `json:"id" db:"id"`
-	UserID       int64     `json:"user_id" db:"user_id"`
-	Amount       float64   `json:"amount" db:"amount"`
-	InterestRate float64   `json:"interest_rate" db:"interest_rate"`
-	TermMonths   int       `json:"term_months" db:"term_months"`
-	CreatedAt    time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
-}
-
-// PaymentSchedule представляет график платежей по кредиту
-type PaymentSchedule struct {
-	ID           int64     `json:"id" db:"id"`
-	CreditID     int64     `json:"credit_id" db:"credit_id"`
-	PaymentDate  time.Time `json:"payment_date" db:"payment_date"`
-	Amount       float64   `json:"amount" db:"amount"`
-	Paid         bool      `json:"paid" db:"paid"`
-	Penalty      float64   `json:"penalty" db:"penalty"`
-	CreatedAt    time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
-}
-
-// Validate валидирует структуру
 func (u *User) Validate() error {
-	validate := validator.New()
-	return validate.Struct(u)
+	if u.Username == "" || len(u.Username) < 3 {
+		return errors.New("username must be at least 3 characters long")
+	}
+	if u.Email == "" || !regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`).MatchString(u.Email) {
+		return errors.New("invalid email format")
+	}
+	if u.Password == "" || len(u.Password) < 8 {
+		return errors.New("password must be at least 8 characters long")
+	}
+	return nil
+}
+
+type Account struct {
+	ID        int64     `json:"id"`
+	UserID    int64     `json:"user_id"`
+	Balance   float64   `json:"balance"`
+	Currency  string    `json:"currency"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type Transaction struct {
+	ID          int64     `json:"id"`
+	AccountID   int64     `json:"account_id"`
+	Amount      float64   `json:"amount"`
+	Type        string    `json:"type"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+type Card struct {
+	ID         int64     `json:"id"`
+	AccountID  int64     `json:"account_id"`
+	CardNumber string    `json:"card_number"` // Зашифрованный номер
+	ExpiryDate string    `json:"expiry_date"`
+	CVV        string    `json:"cvv"` // Хешированный CVV
+	HMAC       string    `json:"hmac"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+func (c *Card) Validate() error {
+	if c.AccountID <= 0 {
+		return errors.New("invalid account ID")
+	}
+	if !regexp.MustCompile(`^\d{16}$`).MatchString(c.CardNumber) {
+		return errors.New("card number must be 16 digits")
+	}
+	if !regexp.MustCompile(`^(0[1-9]|1[0-2])\/\d{2}$`).MatchString(c.ExpiryDate) {
+		return errors.New("invalid expiry date format (MM/YY)")
+	}
+	if !regexp.MustCompile(`^\d{3}$`).MatchString(c.CVV) {
+		return errors.New("CVV must be 3 digits")
+	}
+	return nil
 }

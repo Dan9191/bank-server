@@ -19,8 +19,9 @@ const (
 	dbPort     = 5436
 	dbUser     = "test"
 	dbPassword = "test"
-	dbName     = "test"
+	dbName     = "bank_service"
 	jwtSecret  = "your_jwt_secret"
+	hmacSecret = "your_hmac_secret"
 )
 
 func main() {
@@ -56,14 +57,17 @@ func main() {
 	userRepo := repositories.NewUserRepository(db)
 	accountRepo := repositories.NewAccountRepository(db)
 	transactionRepo := repositories.NewTransactionRepository(db)
+	cardRepo := repositories.NewCardRepository(db)
 
 	// Инициализация сервисов
 	userService := services.NewUserService(userRepo, jwtSecret)
 	accountService := services.NewAccountService(accountRepo, userRepo, transactionRepo, db)
+	cardService := services.NewCardService(cardRepo, accountRepo, hmacSecret)
 
 	// Инициализация обработчиков
 	userHandler := handlers.NewUserHandler(userService, logger)
 	accountHandler := handlers.NewAccountHandler(accountService, logger)
+	cardHandler := handlers.NewCardHandler(cardService, logger)
 
 	// Создание маршрутизатора
 	router := mux.NewRouter()
@@ -85,6 +89,8 @@ func main() {
 	protected.HandleFunc("/accounts/{id}/deposit", accountHandler.Deposit).Methods("POST")
 	protected.HandleFunc("/accounts/{id}/withdraw", accountHandler.Withdraw).Methods("POST")
 	protected.HandleFunc("/transfer", accountHandler.Transfer).Methods("POST")
+	protected.HandleFunc("/cards", cardHandler.CreateCard).Methods("POST")
+	protected.HandleFunc("/accounts/{account_id}/cards", cardHandler.GetCards).Methods("GET")
 
 	// Настройка сервера
 	server := &http.Server{
@@ -103,12 +109,6 @@ func runMigrations(db *sql.DB, logger *logrus.Logger) error {
 	_, err := db.Exec("CREATE SCHEMA IF NOT EXISTS bank")
 	if err != nil {
 		return fmt.Errorf("failed to create schema bank: %w", err)
-	}
-
-	logger.Debug("Enabling pgcrypto extension")
-	_, err = db.Exec("CREATE EXTENSION IF NOT EXISTS pgcrypto")
-	if err != nil {
-		return fmt.Errorf("failed to enable pgcrypto: %w", err)
 	}
 
 	logger.Debug("Creating table bank.users")
