@@ -26,3 +26,17 @@ type AccountRepository interface {
 type TransactionRepository interface {
 	Create(ctx context.Context, tx *sql.Tx, transaction *models.Transaction) error
 }
+
+// CardRepository определяет методы для работы с картами
+type CardRepository interface {
+	Create(ctx context.Context, card *models.Card) error
+	FindByAccountID(ctx context.Context, accountID int64) ([]*models.Card, error)
+}
+
+// CreditRepository определяет методы для работы с кредитами и графиком платежей
+type CreditRepository interface {
+	CreateCredit(ctx context.Context, credit *models.Credit) error
+	FindByUserID(ctx context.Context, userID int64) ([]*models.Credit, error)
+	CreatePaymentSchedule(ctx context.Context, paymentSchedule *models.PaymentSchedule) error
+	FindPaymentSchedulesByCreditID(ctx context.Context, creditID int64) ([]*models.PaymentSchedule, error)
+}

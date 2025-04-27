@@ -7,11 +7,6 @@ import (
 	"github.com/bank-service/internal/models"
 )
 
-type CardRepository interface {
-	Create(ctx context.Context, card *models.Card) error
-	FindByAccountID(ctx context.Context, accountID int64) ([]*models.Card, error)
-}
-
 type cardRepository struct {
 	db *sql.DB
 }

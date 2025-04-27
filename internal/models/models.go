@@ -49,9 +49,9 @@ type Transaction struct {
 type Card struct {
 	ID         int64     `json:"id"`
 	AccountID  int64     `json:"account_id"`
-	CardNumber string    `json:"card_number"` // Зашифрованный номер
+	CardNumber string    `json:"card_number"`
 	ExpiryDate string    `json:"expiry_date"`
-	CVV        string    `json:"cvv"` // Хешированный CVV
+	CVV        string    `json:"cvv"`
 	HMAC       string    `json:"hmac"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
@@ -69,6 +69,56 @@ func (c *Card) Validate() error {
 	}
 	if !regexp.MustCompile(`^\d{3}$`).MatchString(c.CVV) {
 		return errors.New("CVV must be 3 digits")
+	}
+	return nil
+}
+
+type Credit struct {
+	ID           int64     `json:"id"`
+	UserID       int64     `json:"user_id"`
+	Amount       float64   `json:"amount"`
+	InterestRate float64   `json:"interest_rate"`
+	TermMonths   int       `json:"term_months"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+func (c *Credit) Validate() error {
+	if c.UserID <= 0 {
+		return errors.New("invalid user ID")
+	}
+	if c.Amount <= 0 {
+		return errors.New("amount must be positive")
+	}
+	if c.InterestRate < 0 || c.InterestRate > 100 {
+		return errors.New("interest rate must be between 0 and 100")
+	}
+	if c.TermMonths <= 0 {
+		return errors.New("term months must be positive")
+	}
+	return nil
+}
+
+type PaymentSchedule struct {
+	ID          int64     `json:"id"`
+	CreditID    int64     `json:"credit_id"`
+	PaymentDate time.Time `json:"payment_date"`
+	Amount      float64   `json:"amount"`
+	Paid        bool      `json:"paid"`
+	Penalty     float64   `json:"penalty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+func (ps *PaymentSchedule) Validate() error {
+	if ps.CreditID <= 0 {
+		return errors.New("invalid credit ID")
+	}
+	if ps.Amount <= 0 {
+		return errors.New("amount must be positive")
+	}
+	if ps.PaymentDate.IsZero() {
+		return errors.New("payment date is required")
 	}
 	return nil
 }

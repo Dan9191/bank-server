@@ -58,16 +58,19 @@ func main() {
 	accountRepo := repositories.NewAccountRepository(db)
 	transactionRepo := repositories.NewTransactionRepository(db)
 	cardRepo := repositories.NewCardRepository(db)
+	creditRepo := repositories.NewCreditRepository(db)
 
 	// Инициализация сервисов
 	userService := services.NewUserService(userRepo, jwtSecret)
 	accountService := services.NewAccountService(accountRepo, userRepo, transactionRepo, db)
 	cardService := services.NewCardService(cardRepo, accountRepo, hmacSecret)
+	creditService := services.NewCreditService(creditRepo, userRepo)
 
 	// Инициализация обработчиков
 	userHandler := handlers.NewUserHandler(userService, logger)
 	accountHandler := handlers.NewAccountHandler(accountService, logger)
 	cardHandler := handlers.NewCardHandler(cardService, logger)
+	creditHandler := handlers.NewCreditHandler(creditService, logger)
 
 	// Создание маршрутизатора
 	router := mux.NewRouter()
@@ -91,6 +94,9 @@ func main() {
 	protected.HandleFunc("/transfer", accountHandler.Transfer).Methods("POST")
 	protected.HandleFunc("/cards", cardHandler.CreateCard).Methods("POST")
 	protected.HandleFunc("/accounts/{account_id}/cards", cardHandler.GetCards).Methods("GET")
+	protected.HandleFunc("/credits", creditHandler.CreateCredit).Methods("POST")
+	protected.HandleFunc("/credits", creditHandler.GetCredits).Methods("GET")
+	protected.HandleFunc("/credits/{credit_id}/payment-schedules", creditHandler.GetPaymentSchedules).Methods("GET")
 
 	// Настройка сервера
 	server := &http.Server{
