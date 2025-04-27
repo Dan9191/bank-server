@@ -20,7 +20,7 @@ const (
 	dbUser     = "test"
 	dbPassword = "test"
 	dbName     = "test"
-	jwtSecret  = "your_jwt_secret" // Замените на безопасный секрет
+	jwtSecret  = "your_jwt_secret"
 )
 
 func main() {
@@ -55,10 +55,11 @@ func main() {
 	// Инициализация репозиториев
 	userRepo := repositories.NewUserRepository(db)
 	accountRepo := repositories.NewAccountRepository(db)
+	transactionRepo := repositories.NewTransactionRepository(db)
 
 	// Инициализация сервисов
 	userService := services.NewUserService(userRepo, jwtSecret)
-	accountService := services.NewAccountService(accountRepo, userRepo)
+	accountService := services.NewAccountService(accountRepo, userRepo, transactionRepo, db)
 
 	// Инициализация обработчиков
 	userHandler := handlers.NewUserHandler(userService, logger)
@@ -81,6 +82,9 @@ func main() {
 	protected.HandleFunc("/profile", userHandler.Profile).Methods("GET")
 	protected.HandleFunc("/accounts", accountHandler.CreateAccount).Methods("POST")
 	protected.HandleFunc("/accounts", accountHandler.GetAccounts).Methods("GET")
+	protected.HandleFunc("/accounts/{id}/deposit", accountHandler.Deposit).Methods("POST")
+	protected.HandleFunc("/accounts/{id}/withdraw", accountHandler.Withdraw).Methods("POST")
+	protected.HandleFunc("/transfer", accountHandler.Transfer).Methods("POST")
 
 	// Настройка сервера
 	server := &http.Server{

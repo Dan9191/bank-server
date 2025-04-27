@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/bank-service/internal/models"
 )
@@ -19,4 +20,9 @@ type AccountRepository interface {
 	FindByID(ctx context.Context, id int64) (*models.Account, error)
 	FindByUserID(ctx context.Context, userID int64) ([]*models.Account, error)
 	UpdateBalance(ctx context.Context, accountID int64, balance float64) error
+}
+
+// TransactionRepository определяет методы для работы с транзакциями
+type TransactionRepository interface {
+	Create(ctx context.Context, tx *sql.Tx, transaction *models.Transaction) error
 }
