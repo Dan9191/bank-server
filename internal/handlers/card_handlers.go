@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/bank-service/internal/services"
 	"github.com/gorilla/mux"
@@ -23,7 +24,7 @@ func NewCardHandler(cardService services.CardService, logger *logrus.Logger) *Ca
 }
 
 func (h *CardHandler) CreateCard(w http.ResponseWriter, r *http.Request) {
-	// Извлекаем user_id из контекста
+	// Извлекаем user_id из контекста (для логирования или других проверок)
 	userID, ok := r.Context().Value("user_id").(int64)
 	if !ok {
 		h.logger.Error("user_id not found in context")
@@ -44,10 +45,10 @@ func (h *CardHandler) CreateCard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Создаем карту
-	card, err := h.cardService.CreateCard(r.Context(), req.AccountID, req.CardNumber, req.ExpiryDate, req.CVV, userID)
+	// Создаём карту
+	card, err := h.cardService.CreateCard(r.Context(), req.AccountID, req.CardNumber, req.ExpiryDate, req.CVV)
 	if err != nil {
-		h.logger.Error("Failed to create card: ", err)
+		h.logger.WithField("user_id", userID).Error("Failed to create card: ", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -58,7 +59,15 @@ func (h *CardHandler) CreateCard(w http.ResponseWriter, r *http.Request) {
 		AccountID  int64  `json:"account_id"`
 		CardNumber string `json:"card_number"`
 		ExpiryDate string `json:"expiry_date"`
-	}{card.ID, card.AccountID, card.CardNumber, card.ExpiryDate}
+		CreatedAt  string `json:"created_at"`
+	}{
+		ID:         card.ID,
+		AccountID:  card.AccountID,
+		CardNumber: card.CardNumber,
+		ExpiryDate: card.ExpiryDate,
+		CreatedAt:  card.CreatedAt.Format(time.RFC3339),
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
@@ -67,7 +76,7 @@ func (h *CardHandler) CreateCard(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CardHandler) GetCards(w http.ResponseWriter, r *http.Request) {
-	// Извлекаем user_id из контекста
+	// Извлекаем user_id из контекста (для логирования или других проверок)
 	userID, ok := r.Context().Value("user_id").(int64)
 	if !ok {
 		h.logger.Error("user_id not found in context")
@@ -85,9 +94,9 @@ func (h *CardHandler) GetCards(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Получаем карты
-	cards, err := h.cardService.GetCards(r.Context(), accountID, userID)
+	cards, err := h.cardService.GetCards(r.Context(), accountID)
 	if err != nil {
-		h.logger.Error("Failed to get cards: ", err)
+		h.logger.WithField("user_id", userID).Error("Failed to get cards: ", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -98,6 +107,7 @@ func (h *CardHandler) GetCards(w http.ResponseWriter, r *http.Request) {
 		AccountID  int64  `json:"account_id"`
 		CardNumber string `json:"card_number"`
 		ExpiryDate string `json:"expiry_date"`
+		CreatedAt  string `json:"created_at"`
 	}, len(cards))
 	for i, card := range cards {
 		resp[i] = struct {
@@ -105,7 +115,14 @@ func (h *CardHandler) GetCards(w http.ResponseWriter, r *http.Request) {
 			AccountID  int64  `json:"account_id"`
 			CardNumber string `json:"card_number"`
 			ExpiryDate string `json:"expiry_date"`
-		}{card.ID, card.AccountID, card.CardNumber, card.ExpiryDate}
+			CreatedAt  string `json:"created_at"`
+		}{
+			ID:         card.ID,
+			AccountID:  card.AccountID,
+			CardNumber: card.CardNumber,
+			ExpiryDate: card.ExpiryDate,
+			CreatedAt:  card.CreatedAt.Format(time.RFC3339),
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")

@@ -32,3 +32,29 @@ func (r *transactionRepository) Create(ctx context.Context, tx *sql.Tx, transact
 	}
 	return nil
 }
+
+func (r *transactionRepository) FindByAccountID(ctx context.Context, accountID int64) ([]*models.Transaction, error) {
+	query := `
+		SELECT id, account_id, amount, type, description, created_at
+		FROM bank.transactions
+		WHERE account_id = $1
+		ORDER BY created_at DESC`
+	rows, err := r.db.QueryContext(ctx, query, accountID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var transactions []*models.Transaction
+	for rows.Next() {
+		transaction := &models.Transaction{}
+		if err := rows.Scan(&transaction.ID, &transaction.AccountID, &transaction.Amount, &transaction.Type, &transaction.Description, &transaction.CreatedAt); err != nil {
+			return nil, err
+		}
+		transactions = append(transactions, transaction)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return transactions, nil
+}

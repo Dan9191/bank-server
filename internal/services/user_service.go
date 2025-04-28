@@ -7,14 +7,9 @@ import (
 
 	"github.com/bank-service/internal/models"
 	"github.com/bank-service/internal/repositories"
-	"github.com/golang-jwt/jwt/v5"
+	"github.com/dgrijalva/jwt-go"
 	"golang.org/x/crypto/bcrypt"
 )
-
-type UserService interface {
-	Register(ctx context.Context, username, email, password string) (*models.User, error)
-	Login(ctx context.Context, email, password string) (string, error)
-}
 
 type userService struct {
 	userRepo  repositories.UserRepository
@@ -35,7 +30,7 @@ func (s *userService) Register(ctx context.Context, username, email, password st
 		return nil, err
 	}
 	if existingUser != nil {
-		return nil, errors.New("user with this email already exists")
+		return nil, errors.New("email already exists")
 	}
 
 	// Хешируем пароль
@@ -44,7 +39,7 @@ func (s *userService) Register(ctx context.Context, username, email, password st
 		return nil, err
 	}
 
-	// Создаем пользователя
+	// Создаём пользователя
 	user := &models.User{
 		Username:  username,
 		Email:     email,
@@ -58,7 +53,7 @@ func (s *userService) Register(ctx context.Context, username, email, password st
 		return nil, err
 	}
 
-	// Сохраняем пользователя в базе
+	// Сохраняем пользователя
 	if err := s.userRepo.Create(ctx, user); err != nil {
 		return nil, err
 	}
@@ -81,10 +76,10 @@ func (s *userService) Login(ctx context.Context, email, password string) (string
 		return "", errors.New("invalid email or password")
 	}
 
-	// Генерируем JWT-токен
+	// Генерируем JWT
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"user_id": user.ID,
-		"exp":     time.Now().Add(24 * time.Hour).Unix(),
+		"exp":     time.Now().Add(time.Hour * 24).Unix(),
 	})
 	tokenString, err := token.SignedString([]byte(s.jwtSecret))
 	if err != nil {
@@ -92,4 +87,15 @@ func (s *userService) Login(ctx context.Context, email, password string) (string
 	}
 
 	return tokenString, nil
+}
+
+func (s *userService) GetProfile(ctx context.Context, userID int64) (*models.User, error) {
+	user, err := s.userRepo.FindByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, errors.New("user not found")
+	}
+	return user, nil
 }

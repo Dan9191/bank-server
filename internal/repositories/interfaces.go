@@ -25,6 +25,7 @@ type AccountRepository interface {
 // TransactionRepository определяет методы для работы с транзакциями
 type TransactionRepository interface {
 	Create(ctx context.Context, tx *sql.Tx, transaction *models.Transaction) error
+	FindByAccountID(ctx context.Context, accountID int64) ([]*models.Transaction, error)
 }
 
 // CardRepository определяет методы для работы с картами

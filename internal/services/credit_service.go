@@ -10,12 +10,6 @@ import (
 	"github.com/bank-service/internal/repositories"
 )
 
-type CreditService interface {
-	CreateCredit(ctx context.Context, userID int64, amount, interestRate float64, termMonths int) (*models.Credit, error)
-	GetCredits(ctx context.Context, userID int64) ([]*models.Credit, error)
-	GetPaymentSchedules(ctx context.Context, creditID, userID int64) ([]*models.PaymentSchedule, error)
-}
-
 type creditService struct {
 	creditRepo repositories.CreditRepository
 	userRepo   repositories.UserRepository

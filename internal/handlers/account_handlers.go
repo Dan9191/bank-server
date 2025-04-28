@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/bank-service/internal/services"
 	"github.com/gorilla/mux"
@@ -23,7 +24,6 @@ func NewAccountHandler(accountService services.AccountService, logger *logrus.Lo
 }
 
 func (h *AccountHandler) CreateAccount(w http.ResponseWriter, r *http.Request) {
-	// Извлекаем user_id из контекста (добавлен middleware)
 	userID, ok := r.Context().Value("user_id").(int64)
 	if !ok {
 		h.logger.Error("user_id not found in context")
@@ -31,7 +31,6 @@ func (h *AccountHandler) CreateAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Создаем счет
 	account, err := h.accountService.CreateAccount(r.Context(), userID)
 	if err != nil {
 		h.logger.Error("Failed to create account: ", err)
@@ -39,13 +38,20 @@ func (h *AccountHandler) CreateAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Формируем ответ
 	resp := struct {
-		ID       int64   `json:"id"`
-		UserID   int64   `json:"user_id"`
-		Balance  float64 `json:"balance"`
-		Currency string  `json:"currency"`
-	}{account.ID, account.UserID, account.Balance, account.Currency}
+		ID        int64   `json:"id"`
+		UserID    int64   `json:"user_id"`
+		Balance   float64 `json:"balance"`
+		Currency  string  `json:"currency"`
+		CreatedAt string  `json:"created_at"`
+	}{
+		ID:        account.ID,
+		UserID:    account.UserID,
+		Balance:   account.Balance,
+		Currency:  account.Currency,
+		CreatedAt: account.CreatedAt.Format(time.RFC3339),
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
@@ -54,7 +60,6 @@ func (h *AccountHandler) CreateAccount(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AccountHandler) GetAccounts(w http.ResponseWriter, r *http.Request) {
-	// Извлекаем user_id из контекста
 	userID, ok := r.Context().Value("user_id").(int64)
 	if !ok {
 		h.logger.Error("user_id not found in context")
@@ -62,28 +67,34 @@ func (h *AccountHandler) GetAccounts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Получаем счета
 	accounts, err := h.accountService.GetAccounts(r.Context(), userID)
 	if err != nil {
 		h.logger.Error("Failed to get accounts: ", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	// Формируем ответ
 	resp := make([]struct {
-		ID       int64   `json:"id"`
-		UserID   int64   `json:"user_id"`
-		Balance  float64 `json:"balance"`
-		Currency string  `json:"currency"`
+		ID        int64   `json:"id"`
+		UserID    int64   `json:"user_id"`
+		Balance   float64 `json:"balance"`
+		Currency  string  `json:"currency"`
+		CreatedAt string  `json:"created_at"`
 	}, len(accounts))
 	for i, account := range accounts {
 		resp[i] = struct {
-			ID       int64   `json:"id"`
-			UserID   int64   `json:"user_id"`
-			Balance  float64 `json:"balance"`
-			Currency string  `json:"currency"`
-		}{account.ID, account.UserID, account.Balance, account.Currency}
+			ID        int64   `json:"id"`
+			UserID    int64   `json:"user_id"`
+			Balance   float64 `json:"balance"`
+			Currency  string  `json:"currency"`
+			CreatedAt string  `json:"created_at"`
+		}{
+			ID:        account.ID,
+			UserID:    account.UserID,
+			Balance:   account.Balance,
+			Currency:  account.Currency,
+			CreatedAt: account.CreatedAt.Format(time.RFC3339),
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -94,7 +105,6 @@ func (h *AccountHandler) GetAccounts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AccountHandler) Deposit(w http.ResponseWriter, r *http.Request) {
-	// Извлекаем user_id из контекста
 	userID, ok := r.Context().Value("user_id").(int64)
 	if !ok {
 		h.logger.Error("user_id not found in context")
@@ -102,7 +112,6 @@ func (h *AccountHandler) Deposit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Извлекаем account_id из URL
 	vars := mux.Vars(r)
 	accountID, err := strconv.ParseInt(vars["id"], 10, 64)
 	if err != nil {
@@ -111,7 +120,6 @@ func (h *AccountHandler) Deposit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Декодируем тело запроса
 	var req struct {
 		Amount float64 `json:"amount"`
 	}
@@ -121,8 +129,26 @@ func (h *AccountHandler) Deposit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Выполняем пополнение
-	if err := h.accountService.Deposit(r.Context(), accountID, req.Amount, userID); err != nil {
+	accounts, err := h.accountService.GetAccounts(r.Context(), userID)
+	if err != nil {
+		h.logger.Error("Failed to get accounts: ", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	var accountExists bool
+	for _, account := range accounts {
+		if account.ID == accountID {
+			accountExists = true
+			break
+		}
+	}
+	if !accountExists {
+		h.logger.Error("Account not found or unauthorized")
+		http.Error(w, "Account not found or unauthorized", http.StatusForbidden)
+		return
+	}
+
+	if err := h.accountService.Deposit(r.Context(), accountID, req.Amount); err != nil {
 		h.logger.Error("Failed to deposit: ", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -132,7 +158,6 @@ func (h *AccountHandler) Deposit(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AccountHandler) Withdraw(w http.ResponseWriter, r *http.Request) {
-	// Извлекаем user_id из контекста
 	userID, ok := r.Context().Value("user_id").(int64)
 	if !ok {
 		h.logger.Error("user_id not found in context")
@@ -140,7 +165,6 @@ func (h *AccountHandler) Withdraw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Извлекаем account_id из URL
 	vars := mux.Vars(r)
 	accountID, err := strconv.ParseInt(vars["id"], 10, 64)
 	if err != nil {
@@ -149,7 +173,6 @@ func (h *AccountHandler) Withdraw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Декодируем тело запроса
 	var req struct {
 		Amount float64 `json:"amount"`
 	}
@@ -159,8 +182,26 @@ func (h *AccountHandler) Withdraw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Выполняем списание
-	if err := h.accountService.Withdraw(r.Context(), accountID, req.Amount, userID); err != nil {
+	accounts, err := h.accountService.GetAccounts(r.Context(), userID)
+	if err != nil {
+		h.logger.Error("Failed to get accounts: ", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	var accountExists bool
+	for _, account := range accounts {
+		if account.ID == accountID {
+			accountExists = true
+			break
+		}
+	}
+	if !accountExists {
+		h.logger.Error("Account not found or unauthorized")
+		http.Error(w, "Account not found or unauthorized", http.StatusForbidden)
+		return
+	}
+
+	if err := h.accountService.Withdraw(r.Context(), accountID, req.Amount); err != nil {
 		h.logger.Error("Failed to withdraw: ", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -170,7 +211,6 @@ func (h *AccountHandler) Withdraw(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AccountHandler) Transfer(w http.ResponseWriter, r *http.Request) {
-	// Извлекаем user_id из контекста
 	userID, ok := r.Context().Value("user_id").(int64)
 	if !ok {
 		h.logger.Error("user_id not found in context")
@@ -178,7 +218,6 @@ func (h *AccountHandler) Transfer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Декодируем тело запроса
 	var req struct {
 		FromAccountID int64   `json:"from_account_id"`
 		ToAccountID   int64   `json:"to_account_id"`
@@ -190,12 +229,86 @@ func (h *AccountHandler) Transfer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Выполняем перевод
-	if err := h.accountService.Transfer(r.Context(), req.FromAccountID, req.ToAccountID, req.Amount, userID); err != nil {
+	accounts, err := h.accountService.GetAccounts(r.Context(), userID)
+	if err != nil {
+		h.logger.Error("Failed to get accounts: ", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	var fromAccountExists bool
+	for _, account := range accounts {
+		if account.ID == req.FromAccountID {
+			fromAccountExists = true
+			break
+		}
+	}
+	if !fromAccountExists {
+		h.logger.Error("Source account not found or unauthorized")
+		http.Error(w, "Source account not found or unauthorized", http.StatusForbidden)
+		return
+	}
+
+	if err := h.accountService.Transfer(r.Context(), req.FromAccountID, req.ToAccountID, req.Amount); err != nil {
 		h.logger.Error("Failed to transfer: ", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func (h *AccountHandler) GetTransactions(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value("user_id").(int64)
+	if !ok {
+		h.logger.Error("user_id not found in context")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	vars := mux.Vars(r)
+	accountID, err := strconv.ParseInt(vars["id"], 10, 64)
+	if err != nil {
+		h.logger.Error("Invalid account ID: ", err)
+		http.Error(w, "Invalid account ID", http.StatusBadRequest)
+		return
+	}
+
+	transactions, err := h.accountService.GetTransactions(r.Context(), accountID, userID)
+	if err != nil {
+		h.logger.Error("Failed to get transactions: ", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	resp := make([]struct {
+		ID          int64   `json:"id"`
+		AccountID   int64   `json:"account_id"`
+		Amount      float64 `json:"amount"`
+		Type        string  `json:"type"`
+		Description string  `json:"description"`
+		CreatedAt   string  `json:"created_at"`
+	}, len(transactions))
+	for i, transaction := range transactions {
+		resp[i] = struct {
+			ID          int64   `json:"id"`
+			AccountID   int64   `json:"account_id"`
+			Amount      float64 `json:"amount"`
+			Type        string  `json:"type"`
+			Description string  `json:"description"`
+			CreatedAt   string  `json:"created_at"`
+		}{
+			ID:          transaction.ID,
+			AccountID:   transaction.AccountID,
+			Amount:      transaction.Amount,
+			Type:        transaction.Type,
+			Description: transaction.Description,
+			CreatedAt:   transaction.CreatedAt.Format(time.RFC3339),
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		h.logger.Error("Failed to encode response: ", err)
+	}
 }

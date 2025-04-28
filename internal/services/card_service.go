@@ -13,11 +13,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type CardService interface {
-	CreateCard(ctx context.Context, accountID int64, cardNumber, expiryDate, cvv string, userID int64) (*models.Card, error)
-	GetCards(ctx context.Context, accountID int64, userID int64) ([]*models.Card, error)
-}
-
 type cardService struct {
 	cardRepo    repositories.CardRepository
 	accountRepo repositories.AccountRepository
@@ -32,8 +27,8 @@ func NewCardService(cardRepo repositories.CardRepository, accountRepo repositori
 	}
 }
 
-func (s *cardService) CreateCard(ctx context.Context, accountID int64, cardNumber, expiryDate, cvv string, userID int64) (*models.Card, error) {
-	// Проверяем, существует ли счет и принадлежит ли он пользователю
+func (s *cardService) CreateCard(ctx context.Context, accountID int64, cardNumber, expiryDate, cvv string) (*models.Card, error) {
+	// Проверяем существование счёта
 	account, err := s.accountRepo.FindByID(ctx, accountID)
 	if err != nil {
 		return nil, err
@@ -41,11 +36,8 @@ func (s *cardService) CreateCard(ctx context.Context, accountID int64, cardNumbe
 	if account == nil {
 		return nil, errors.New("account not found")
 	}
-	if account.UserID != userID {
-		return nil, errors.New("unauthorized access to account")
-	}
 
-	// Создаем карту
+	// Создаём карту
 	card := &models.Card{
 		AccountID:  accountID,
 		CardNumber: cardNumber,
@@ -60,20 +52,20 @@ func (s *cardService) CreateCard(ctx context.Context, accountID int64, cardNumbe
 		return nil, err
 	}
 
+	// Вычисляем HMAC для card_number + expiry_date
+	hmacData := card.CardNumber + card.ExpiryDate
+	mac := hmac.New(sha256.New, []byte(s.hmacSecret))
+	mac.Write([]byte(hmacData))
+	card.HMAC = hex.EncodeToString(mac.Sum(nil))
+
 	// Хешируем CVV
-	hashedCVV, err := bcrypt.GenerateFromPassword([]byte(card.CVV), bcrypt.DefaultCost)
+	hashedCVV, err := bcrypt.GenerateFromPassword([]byte(cvv), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, err
 	}
 	card.CVV = string(hashedCVV)
 
-	// Вычисляем HMAC для card_number + expiry_date
-	data := card.CardNumber + card.ExpiryDate
-	h := hmac.New(sha256.New, []byte(s.hmacSecret))
-	h.Write([]byte(data))
-	card.HMAC = hex.EncodeToString(h.Sum(nil))
-
-	// Сохраняем карту в базе
+	// Сохраняем карту
 	if err := s.cardRepo.Create(ctx, card); err != nil {
 		return nil, err
 	}
@@ -81,8 +73,8 @@ func (s *cardService) CreateCard(ctx context.Context, accountID int64, cardNumbe
 	return card, nil
 }
 
-func (s *cardService) GetCards(ctx context.Context, accountID int64, userID int64) ([]*models.Card, error) {
-	// Проверяем, существует ли счет и принадлежит ли он пользователю
+func (s *cardService) GetCards(ctx context.Context, accountID int64) ([]*models.Card, error) {
+	// Проверяем существование счёта
 	account, err := s.accountRepo.FindByID(ctx, accountID)
 	if err != nil {
 		return nil, err
@@ -90,26 +82,11 @@ func (s *cardService) GetCards(ctx context.Context, accountID int64, userID int6
 	if account == nil {
 		return nil, errors.New("account not found")
 	}
-	if account.UserID != userID {
-		return nil, errors.New("unauthorized access to account")
-	}
 
 	// Получаем карты
 	cards, err := s.cardRepo.FindByAccountID(ctx, accountID)
 	if err != nil {
 		return nil, err
 	}
-
-	// Проверяем HMAC для каждой карты
-	for _, card := range cards {
-		data := card.CardNumber + card.ExpiryDate
-		h := hmac.New(sha256.New, []byte(s.hmacSecret))
-		h.Write([]byte(data))
-		expectedHMAC := hex.EncodeToString(h.Sum(nil))
-		if !hmac.Equal([]byte(card.HMAC), []byte(expectedHMAC)) {
-			return nil, errors.New("HMAC verification failed for card ID " + string(card.ID))
-		}
-	}
-
 	return cards, nil
 }

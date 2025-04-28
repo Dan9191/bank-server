@@ -91,6 +91,7 @@ func main() {
 	protected.HandleFunc("/accounts", accountHandler.GetAccounts).Methods("GET")
 	protected.HandleFunc("/accounts/{id}/deposit", accountHandler.Deposit).Methods("POST")
 	protected.HandleFunc("/accounts/{id}/withdraw", accountHandler.Withdraw).Methods("POST")
+	protected.HandleFunc("/accounts/{id}/transactions", accountHandler.GetTransactions).Methods("GET")
 	protected.HandleFunc("/transfer", accountHandler.Transfer).Methods("POST")
 	protected.HandleFunc("/cards", cardHandler.CreateCard).Methods("POST")
 	protected.HandleFunc("/accounts/{account_id}/cards", cardHandler.GetCards).Methods("GET")
